@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VS Code Web</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm/css/xterm.css" />
+<style>
+  html, body { height: 100%; margin: 0; display: flex; flex-direction: column; font-family: 'Fira Code', monospace; background:#1e1e1e; color:#d4d4d4; }
+  #topbar { height: 40px; background:#333; display:flex; align-items:center; padding:0 10px; }
+  #editor-container { flex:1; display:flex; }
+  #sidebar { width:200px; background:#252526; padding:10px; overflow:auto; }
+  #main { flex:1; display:flex; flex-direction:column; }
+  #tabs { height:30px; background:#2d2d2d; display:flex; align-items:center; padding:0 5px; }
+  .tab { padding:0 10px; cursor:pointer; color:#ccc; margin-right:5px; }
+  .tab.active { background:#1e1e1e; color:#fff; border-radius:3px; }
+  #editor { flex:1; }
+  #terminal { height:150px; background:#1e1e1e; }
+  button { margin-left:10px; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <span>VS Code Web - Augusto</span>
+  <button onclick="runCode()">Executar</button>
+</div>
+
+<div id="editor-container">
+  <div id="sidebar">
+    <h3>Arquivos</h3>
+    <ul>
+      <li onclick="openFile('index.html')">index.html</li>
+      <li onclick="openFile('style.css')">style.css</li>
+      <li onclick="openFile('script.js')">script.js</li>
+      <li onclick="openFile('python.py')">python.py</li>
+      <li onclick="openFile('cpp.cpp')">cpp.cpp</li>
+    </ul>
+  </div>
+  <div id="main">
+    <div id="tabs"></div>
+    <div id="editor"></div>
+    <div id="terminal"></div>
+  </div>
+</div>
+
+<!-- Monaco Editor -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+<!-- xterm.js -->
+<script src="https://cdn.jsdelivr.net/npm/xterm/lib/xterm.js"></script>
+<script>
+let editor, term;
+let files = {
+  'index.html': '<!DOCTYPE html>\n<html>\n<body>\nHello World\n</body>\n</html>',
+  'style.css': 'body { background:#fff; color:#000; }',
+  'script.js': 'console.log("Olá, Augusto!");',
+  'python.py': 'print("Olá do Python!")',
+  'cpp.cpp': '#include <iostream>\nint main() { std::cout << "Olá do C++!\\n"; return 0; }'
+};
+let currentFile = 'index.html';
+let tabsContainer = document.getElementById('tabs');
+
+require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' }});
+require(['vs/editor/editor.main'], function() {
+    editor = monaco.editor.create(document.getElementById('editor'), {
+        value: files[currentFile],
+        language: 'html',
+        theme: 'vs-dark',
+        automaticLayout: true
+    });
+    createTabs();
+});
+
+function createTabs() {
+    tabsContainer.innerHTML = '';
+    for(let f in files){
+        let tab = document.createElement('div');
+        tab.textContent = f;
+        tab.className = 'tab' + (f===currentFile ? ' active' : '');
+        tab.onclick = ()=>openFile(f);
+        tabsContainer.appendChild(tab);
+    }
+}
+
+function openFile(name){
+    currentFile = name;
+    editor.setValue(files[name]);
+    let lang = 'plaintext';
+    if(name.endsWith('.js')) lang='javascript';
+    else if(name.endsWith('.html')) lang='html';
+    else if(name.endsWith('.css')) lang='css';
+    else if(name.endsWith('.py')) lang='python';
+    else if(name.endsWith('.cpp') || name.endsWith('.c')) lang='cpp';
+    monaco.editor.setModelLanguage(editor.getModel(), lang);
+    createTabs();
+}
+
+term = new Terminal({ theme: { background:'#1e1e1e', foreground:'#d4d4d4' } });
+term.open(document.getElementById('terminal'));
+term.writeln('Terminal pronto!');
+
+async function runCode(){
+    let code = editor.getValue();
+    if(currentFile.endsWith('.js')){
+        try{ eval(code); term.writeln('Executado JS com sucesso!'); }
+        catch(e){ term.writeln('Erro JS: '+e); }
+    }else if(currentFile.endsWith('.html')){
+        let w = window.open();
+        w.document.write(code); w.document.close();
+        term.writeln('HTML aberto em nova aba!');
+    }else if(currentFile.endsWith('.css')){
+        let style = document.createElement('style');
+        style.textContent = code; document.head.appendChild(style);
+        term.writeln('CSS aplicado à página!');
+    }else if(currentFile.endsWith('.py')){
+        term.writeln('Executando Python com Pyodide...');
+        if(!window.pyodide){
+            pyodide = await loadPyodide();
+        }
+        try{ let res = await pyodide.runPythonAsync(code); term.writeln(res ?? 'Executado Python!'); }
+        catch(e){ term.writeln('Erro Python: '+e); }
+    }else if(currentFile.endsWith('.cpp') || currentFile.endsWith('.c')){
+        term.writeln('C/C++ não implementado ainda. Requer WebAssembly.');
+    }
+}
+</script>
+<!-- Pyodide CDN para Python -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.23.2/full/pyodide.js"></script>
+
+</body>
+  </html>
